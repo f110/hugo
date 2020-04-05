@@ -102,6 +102,34 @@ func (fs *noSymlinkFs) stat(name string) (os.FileInfo, bool, error) {
 }
 
 func (fs *noSymlinkFs) checkSymlinkStatus(name string, fi os.FileInfo) (os.FileInfo, error) {
+	var metaIsSymlink bool
+
+	if fim, ok := fi.(FileMetaInfo); ok {
+		meta := fim.Meta()
+		metaIsSymlink = meta.IsSymlink()
+	}
+
+	if metaIsSymlink {
+		if fs.allowFiles && !fi.IsDir() {
+			return fi, nil
+		}
+		return nil, ErrPermissionSymlink
+	}
+
+	// Also support non-decorated filesystems, e.g. the Os fs.
+	if isSymlink(fi) {
+		// Need to determine if this is a directory or not.
+		_, sfi, err := evalSymlinks(fs.Fs, name)
+		if err != nil {
+			return nil, err
+		}
+		if fs.allowFiles && !sfi.IsDir() {
+			// Return the original FileInfo to get the expected Name.
+			return fi, nil
+		}
+		return nil, ErrPermissionSymlink
+	}
+
 	return fi, nil
 }
 
